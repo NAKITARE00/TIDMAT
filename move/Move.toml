@@ -4,12 +4,14 @@ version = "1.0.0"
 authors = []
 
 [addresses]
+tidmat = "0x4c165fa69be92a9608fde90fe5e277370164606e7f281c4cc286faab9a0ef9d8"
 
 [dev-addresses]
 
 [dependencies.AptosFramework]
-git = "https://github.com/aptos-labs/aptos-core.git"
-rev = "mainnet"
-subdir = "aptos-move/framework/aptos-framework"
+# git = "https://github.com/aptos-labs/aptos-core.git"
+# rev = "mainnet"
+# subdir = "aptos-move/framework/aptos-framework"
+local = ".pkg/aptos-core/aptos-move/framework/aptos-framework"
 
 [dev-dependencies]
