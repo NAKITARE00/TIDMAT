@@ -1,10 +1,10 @@
 [package]
-name = "backend"
+name = "tidmat"
 version = "1.0.0"
 authors = []
 
 [addresses]
-backend = "0x3fec05744f9ae0b353bd3daa46bdaa16811aea3bd8688f0ca9ac2137308b2d8f"
+tidmat = "0x3fec05744f9ae0b353bd3daa46bdaa16811aea3bd8688f0ca9ac2137308b2d8f"
 
 [dev-addresses]
 
