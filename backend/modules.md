@@ -1,8 +1,8 @@
-# Decentralized Data Marketplace Move Modules
+# TIDMAT Move Modules
 
-This documentation outlines the APIs available in the Campaign, Escrow, and Contribution modules of the decentralized data marketplace.
+This documentation outlines the APIs available in the Campaign, Escrow, and Contribution modules of TIDMAT.
 
-## 1. Campaign Module (`marketplace::campaign`)
+## 1. Campaign Module (`tidmat::campaign`)
 
 The Campaign module manages data collection campaigns with configurable parameters and reward distribution.
 
@@ -100,7 +100,7 @@ Returns campaign status.
 public fun get_campaign_status(creator_addr: address): u8
 ```
 
-## 2. Escrow Module (`marketplace::escrow`)
+## 2. Escrow Module (`tidmat::escrow`)
 
 The Escrow module handles secure fund management between campaign creators and contributors.
 
@@ -171,7 +171,7 @@ Returns the escrow amount.
 public fun get_escrow_amount<CoinType>(creator_address: address): u64
 ```
 
-## 3. Contribution Module (`marketplace::contribution`)
+## 3. Contribution Module (`tidmat::contribution`)
 
 The Contribution module manages data submissions and verification processes.
 
