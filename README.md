@@ -68,7 +68,7 @@ Tidmat is a platform for AI researchers, companies, and developers needing verif
 
 ## License
 
-Copyright 2024 ASAP
+Copyright 2025 Tidmat
 
 Licensed under the AGPL V3 License. <br/> See [LICENSE.md](LICENSE.md) for more information.
 
@@ -76,11 +76,11 @@ Licensed under the AGPL V3 License. <br/> See [LICENSE.md](LICENSE.md) for more 
 
 ## Contributors ✨
 
-<a href="https://github.com/remarkablemark">
-  <img src="https://avatars.githubusercontent.com/u/93928881?s=50&u=b468eec8d146b8a918bcae959e3ee7b74ba336c2&v=4">
+<a href="https://github.com/NAKITARE00/TIDMAT/graphs/contributors">
+  <p align="left">
+    <img width="220" src="https://contrib.rocks/image?repo=NAKITARE00/TIDMAT" alt="A table of avatars from the project's contributors" />
+  </p>
 </a>
-
-
 
 ## Star History
 
