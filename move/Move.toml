@@ -5,6 +5,8 @@ authors = []
 
 [addresses]
 tidmat = "0x4c165fa69be92a9608fde90fe5e277370164606e7f281c4cc286faab9a0ef9d8"
+fa_metadata_addr = "0x1"
+
 
 [dev-addresses]
 
