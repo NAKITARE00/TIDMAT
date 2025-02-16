@@ -80,7 +80,9 @@ module tidmat::escrow {
 	let cut = math64::mul_div(pool_bal, 1, 100);
 	treasury::process_payment(creator, cut);
 
-        let per_contributor_reward = pool_bal / verified_contributions;
+	let new_pool_bal = pool_bal - cut;
+
+        let per_contributor_reward = new_pool_bal / verified_contributions;
         assert!(per_contributor_reward > 0, error::invalid_argument(EINSUFFICIENT_FUNDS));
 
         let i = 0;
