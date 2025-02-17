@@ -5,7 +5,7 @@ authors = []
 
 [addresses]
 tidmat = "0x3fec05744f9ae0b353bd3daa46bdaa16811aea3bd8688f0ca9ac2137308b2d8f"
-fa_metadata_addr = "0x1" // Change to Move Token Address
+fa_metadata_addr = "0x1" # Change to Move Token Address
 
 [dev-addresses]
 

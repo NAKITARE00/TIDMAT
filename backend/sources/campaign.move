@@ -29,11 +29,11 @@ module tidmat::campaign {
 
     struct Campaign has key, store, copy, drop {
         id: u64,
-	name: String,
+	    name: String,
         creator: address,
         reward_pool: u64,
         escrow_c: escrow::Escrow,
-	sample_data_hash: vector<u8>,
+	    sample_data_hash: vector<u8>,
         data_type: vector<u8>,
         quality_threshold: u8,
         deadline: u64,
@@ -44,7 +44,7 @@ module tidmat::campaign {
     }
 
     struct CreatorCampaignStore has key {
-	campaigns: vector<Campaign>
+	    campaigns: vector<Campaign>
     }
 
     struct CampaignRegistry has key {
@@ -307,5 +307,4 @@ module tidmat::campaign {
 
         campaign.status
     }
-
 }
