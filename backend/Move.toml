@@ -4,7 +4,7 @@ version = "1.0.0"
 authors = []
 
 [addresses]
-tidmat = "0x3fec05744f9ae0b353bd3daa46bdaa16811aea3bd8688f0ca9ac2137308b2d8f"
+tidmat = "0x3FEC05744F9AE0B353BD3DAA46BDAA16811AEA3BD8688F0CA9AC2137308B2D8F"
 fa_metadata_addr = "0x1" # Change to Move Token Address
 
 [dev-addresses]
