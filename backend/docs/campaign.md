@@ -1,87 +1,105 @@
 # Campaign Module Documentation
 
 ## Overview
-The `campaign.move` module powers the campaign system within the Tidmat ecosystem. It allows creators to initiate data collection campaigns, stake reward pools, manage contributor submissions, and distribute rewards upon successful verification.
+The `campaign` module in Move is responsible for managing data contribution campaigns. It allows users (creators) to create campaigns, track contributions, manage escrowed reward pools, and distribute funds based on verified contributions.
+
+This document provides a detailed guide to help frontend and backend developers understand how to interact with the module.
 
 ## Features
-- **Campaign Creation**: Enables creators to launch campaigns and set staking requirements.
-- **Contribution Submission**: Allows contributors to submit data for review.
-- **Verification & Acceptance**: Creators verify contributions and accept valid submissions.
-- **Reward Distribution**: Distributes rewards to successful contributors.
-- **Campaign Cancellation**: Allows creators to cancel campaigns under specific conditions.
-- **Campaign Inquiry**: Provides views to retrieve campaign details and status.
+- Campaign creation and management
+- Contribution tracking and verification
+- Reward pool escrow and fund distribution
+- Campaign cancellation and refunds
+- Querying campaigns and their statuses
+
+## Key Constants
+| Constant | Description |
+|----------|-------------|
+| `EINVALID_CAMPAIGN_PARAMS` | Error code for invalid campaign parameters |
+| `ECAMPAIGN_NOT_FOUND` | Error code when a campaign is not found |
+| `EUNAUTHORIZED_ACTION` | Error code for unauthorized actions |
+| `ECAMPAIGN_EXPIRED` | Error code when the campaign has expired |
+| `ECAMPAIGN_ALREADY_EXISTS` | Error code when a campaign with the same ID already exists |
+| `EREGISTRY_NOT_FOUND` | Error code when the campaign registry is not found |
+| `ESTORE_NOT_FOUND` | Error code when the creator campaign store is not found |
+| `EINVALID_CONTRIBUTION_PARAMS` | Error code for invalid contribution parameters |
+| `ECONTRIBUTION_NOT_FOUND` | Error code when a contribution is not found |
+
+## Campaign Status Codes
+| Status Code | Description |
+|-------------|-------------|
+| `CAMPAIGN_STATUS_DRAFT (1)` | Campaign is in draft mode |
+| `CAMPAIGN_STATUS_ACTIVE (2)` | Campaign is active and accepting contributions |
+| `CAMPAIGN_STATUS_COMPLETED (3)` | Campaign has been successfully completed |
+| `CAMPAIGN_STATUS_CANCELLED (4)` | Campaign has been canceled |
 
 ## Data Structures
 ### `Campaign`
-A struct that represents a campaign:
-```move
-struct Campaign has key {
-    creator: address,
-    reward_pool: u64,
-    total_contributions: u64,
-    verified_contributions: u64,
-    active: bool
-}
-```
-- `creator`: The address of the campaign creator.
-- `reward_pool`: The total amount staked for rewards.
-- `total_contributions`: The number of contributions received.
-- `verified_contributions`: The number of accepted contributions.
-- `active`: Indicates if the campaign is active.
+A campaign object contains:
+- `id`: Unique campaign ID
+- `name`: Campaign name
+- `creator`: Address of the creator
+- `reward_pool`: Total reward pool
+- `escrow_c`: Escrow contract for funds
+- `sample_data_hash`: Hash of the sample data
+- `data_type`: Type of data required
+- `quality_threshold`: Minimum quality threshold for contributions
+- `deadline`: Deadline timestamp
+- `min_contributions`: Minimum required contributions
+- `max_contributions`: Maximum allowed contributions
+- `status`: Campaign status
+- `service_fee`: Fee charged for campaign creation
 
-### `Contribution`
-A struct that represents a contribution:
-```move
-struct Contribution has key {
-    contributor: address,
-    campaign_id: u64,
-    accepted: bool
-}
-```
-- `contributor`: The address of the contributor.
-- `campaign_id`: The ID of the associated campaign.
-- `accepted`: Whether the contribution is accepted or not.
+### `CreatorCampaignStore`
+- Stores all campaigns created by a specific creator.
 
-## Functions
-### `create_campaign(creator: &signer, reward_pool: u64) acquires Campaign`
-Initializes a new campaign and stakes the reward pool.
+### `CampaignRegistry`
+- Maintains a global list of all campaigns and the next campaign ID.
 
-### `submit_contribution(contributor: &signer, campaign_id: u64) acquires Contribution`
-Allows users to submit data to a campaign.
+### `Fee`
+- Stores the service fee and fee collector address.
 
-### `verify_contribution(creator: &signer, contributor: address, campaign_id: u64) acquires Campaign, Contribution`
-Marks a contribution as accepted if valid.
+## Public Entry Functions
+### `initialize_registry(admin: &signer)`
+- Initializes the campaign registry.
 
-### `distribute_rewards(creator: &signer, campaign_id: u64) acquires Campaign`
-Distributes rewards among accepted contributors.
+### `create_campaign(creator: &signer, name: String, ...)`
+- Creates a new campaign and stores it under the creator.
+- Requires the creator to stake the reward pool in an escrow contract.
 
-### `cancel_campaign(creator: &signer, campaign_id: u64) acquires Campaign`
-Allows a creator to cancel a campaign, with refund conditions:
-- If contributions exist, a 10% fee is deducted.
-- If no contributions exist, a full refund is processed.
+### `cancel_campaign(creator: &signer, campaign_id: u64)`
+- Allows a creator to cancel an active campaign.
+- Refunds the escrowed funds based on the number of verified contributions.
+- Charges a cancellation fee if contributions exist.
 
-### `get_campaign_details(campaign_id: u64) acquires Campaign` (View Function)
-Fetches details of a campaign, including status and rewards.
+### `finalize_campaign(creator: &signer, campaign_id: u64)`
+- Finalizes a campaign if the deadline has passed and enough contributions are verified.
+- Distributes escrowed funds to verified contributors.
 
-### `get_user_contributions(user: address) acquires Contribution` (View Function)
-Returns all contributions made by a user.
+### `submit_contribution(contributor: &signer, campaign_id: u64, data: vector<u8>)`
+- Submits a contribution to a campaign.
 
-## Usage Guide
-### Frontend Integration
-1. **Campaign Creation:** Call `create_campaign(creator, reward_pool)` when a user wants to launch a campaign.
-2. **Submission Flow:** Call `submit_contribution(contributor, campaign_id, data)` when a user submits data.
-3. **Update Submission Status:** Update submissions using `update_contribution_status(creator, campaign_id, contributor, status)`.
-4. **Reward Distribution:** After verification and all contributions are accepted, call `finalize_campaign(creator, campaign_id)`.
-5. **Campaign Cancellation:** Use `cancel_campaign(creator, campaign_id)` if necessary.
-6. **Data Retrieval:** Use `get_campaign_details(campaign_id)` and `get_user_contributions(user)` to fetch campaign and user data.
-7. **Accept Verified Contributions:** Use `accept_verified_contributions(creator, campaign_id)` to accept all campaign contributions
+### `update_contribution_status(_sender: &signer, campaign_id: u64, contributor_id: u64, status: u8)`
+- Updates the status of a contribution.
 
-## TODOs & Placeholders
-- **Error Handling:** Improve error messages for invalid actions.
-- **Multi-Creator Support:** Allow multiple stakeholders in a campaign.
-- **Event Emissions:** Emit events for campaign creation, contributions, and payouts.
+### `accept_verified_contributions(creator: &signer, campaign_id: u64)`
+- Allows the creator to accept and finalize verified contributions.
 
----
-This documentation provides an overview of the `campaign.move` module, its functionalities, and how to integrate with it from the frontend. 🚀
+### `withdraw_creator_fee(admin: &signer, recipient: address)`
+- Allows the admin to withdraw the accumulated service fees.
+
+## View Functions
+### `get_campaign_ids(): vector<u64>`
+- Retrieves all campaign IDs.
+
+### `get_creator_campaign_ids(creator_addr: address): vector<u64>`
+- Retrieves all campaign IDs for a specific creator.
+
+
+## Notes for Developers
+- **Frontend Devs:**
+  - Ensure proper UI validation before allowing campaign creation.
+  - Implement contribution submission and status tracking interfaces.
+  - Use the view functions to display active campaigns.
 
 
