@@ -3,7 +3,6 @@ module tidmat::escrow {
     use std::error;
     use std::vector;
     use aptos_std::math64;
-    use aptos_framework::object::Object;
     use tidmat::stake;
     use tidmat::treasury;
     use tidmat::contribution::{Self, Contribution};
@@ -13,12 +12,12 @@ module tidmat::escrow {
     const EUNAUTHORIZED_ACCESS: u64 = 3;
     const EINCOMPLETE_CAMPAIGN: u64 = 4;
 
-    struct Escrow has key, store, drop, copy {
+    struct Escrow has key, store, drop {
         campaign_id: u64,
         creator: address,
         total_locked: u64,
         pool_bal: u64,
-        locked_funds: Object<stake::StakePool>
+        locked_funds: stake::StakePool
     }
 
     public fun create_escrow(
@@ -44,7 +43,7 @@ module tidmat::escrow {
 
     public fun refund(
         creator: &signer,
-        escrow: Escrow,    
+        escrow: &mut Escrow,    
         apply_fee: bool
     ) {
         assert!(signer::address_of(creator) == escrow.creator, error::invalid_argument(EUNAUTHORIZED_ACCESS));
@@ -58,7 +57,7 @@ module tidmat::escrow {
 
         let final_refund = refund_amount - fee;
         stake::transfer_from_pool(
-            escrow.locked_funds, 
+            &mut escrow.locked_funds, 
             escrow.creator,
             final_refund
         );
@@ -68,13 +67,12 @@ module tidmat::escrow {
 
     public fun release_funds(
         creator: &signer,
-        escrow: Escrow,
+        escrow: &mut Escrow,
         contributions: vector<Contribution>,
         verified_contributions: u64
     ) {
-        assert!(verified_contributions > 0, error::invalid_state(EINCOMPLETE_CAMPAIGN));
-
-        let pool_bal = stake::get_pool_bal(escrow.locked_funds);
+	assert!(verified_contributions > 0, EINCOMPLETE_CAMPAIGN);
+        let pool_bal = stake::get_pool_bal(&escrow.locked_funds);
 
         // Marketplace Cut
         let cut = math64::mul_div(pool_bal, 1, 100);
@@ -91,7 +89,7 @@ module tidmat::escrow {
             let contribution = vector::borrow(&contributions, i);
             let contributor = contribution::get_contributor_addr(contribution);
             stake::transfer_from_pool(
-                escrow.locked_funds,
+                &mut escrow.locked_funds,
                 contributor,
                 per_contributor_reward
             );    
@@ -99,7 +97,7 @@ module tidmat::escrow {
         }; 
     }
 
-    public fun get_escrow_pool_bal(escrow: Escrow): u64 {
+    public fun get_escrow_pool_bal(escrow: &Escrow): u64 {
         escrow.pool_bal
     }    
 }

@@ -1,6 +1,7 @@
 module tidmat::treasury {
     use std::signer;
     use std::error;
+    use aptos_framework::timestamp;
     use aptos_framework::object::{Self, Object};
     use aptos_framework::fungible_asset::{Self, Metadata};
     use aptos_framework::primary_fungible_store;
@@ -18,6 +19,10 @@ module tidmat::treasury {
 
     struct Admin has key {
         addr: address
+    }
+
+    struct FungibleAssetMetadata has key, store {
+	fa_metadata_object: Object<Metadata>
     }
 
     // Keep `init_module` private for module initialization
@@ -44,6 +49,10 @@ module tidmat::treasury {
             bal: fungible_asset::balance(store),
             store
         });
+
+	move_to(admin, FungibleAssetMetadata {
+	   fa_metadata_object
+	});
     }
 
     // Add a public function for external initialization
@@ -52,18 +61,18 @@ module tidmat::treasury {
         init_module_internal(admin, fa_metadata);
     }
 
-    public fun process_payment(payer: &signer, amount: u64) acquires Treasury {
+    public fun process_payment(payer: &signer, amount: u64) acquires Treasury, FungibleAssetMetadata {
         let payer_addr = signer::address_of(payer);
         
         assert!(exists<Treasury>(@tidmat), error::not_found(ETREASURY_NOT_FOUND));
         let treasury = borrow_global_mut<Treasury>(@tidmat);
 
-        let fa_metadata = get_token_metadata();
-        assert!(primary_fungible_store::balance(payer_addr, fa_metadata) >= amount, ENOT_ENOUGH_BAL); 
+        let fa = borrow_global<FungibleAssetMetadata>(@tidmat);
+        assert!(primary_fungible_store::balance(payer_addr, fa.fa_metadata_object) >= amount, ENOT_ENOUGH_BAL); 
 
         fungible_asset::transfer(
             payer,
-            primary_fungible_store::primary_store(payer_addr, fa_metadata),
+            primary_fungible_store::primary_store(payer_addr, fa.fa_metadata_object),
             treasury.store,
             amount
         );
@@ -71,16 +80,16 @@ module tidmat::treasury {
         treasury.bal = fungible_asset::balance(treasury.store);
     }
 
-    public entry fun withdraw_funds(admin: &signer) acquires Admin, Treasury {
+    public entry fun withdraw_funds(admin: &signer) acquires Admin, Treasury, FungibleAssetMetadata {
         assert_admin(admin);
         
         let treasury = borrow_global<Treasury>(@tidmat);
-        let fa_metadata = get_token_metadata();
+        let fa = borrow_global<FungibleAssetMetadata>(@tidmat);
         
         fungible_asset::transfer(
             admin,
             treasury.store,
-            primary_fungible_store::primary_store(signer::address_of(admin), fa_metadata),
+            primary_fungible_store::primary_store(signer::address_of(admin), fa.fa_metadata_object),
             treasury.bal
         );
     }
@@ -98,7 +107,11 @@ module tidmat::treasury {
         assert!(account_addr == admin.addr, UNAUTHORIZED);
     }
 
-    fun get_token_metadata(): Object<Metadata> {
-        object::address_to_object<Metadata>(@fa_metadata_addr)
+    #[test_only]
+    public fun init_module_for_test_with_fa(aptos_framework: &signer, sender: &signer, fa_metadata_object: Object<Metadata>) {
+	timestamp::set_time_has_started_for_testing(aptos_framework);
+
+	init_module_internal(sender, fa_metadata_object);
     }
+
 }

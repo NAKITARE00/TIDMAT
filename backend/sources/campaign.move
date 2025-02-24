@@ -1,8 +1,8 @@
 module tidmat::campaign {
     use std::signer;
-    use std::error;
     use std::vector;
     use std::string::String;
+    use aptos_std::simple_map::{Self, SimpleMap};
     use aptos_framework::timestamp;
     use tidmat::escrow;
     use tidmat::treasury;
@@ -20,18 +20,20 @@ module tidmat::campaign {
     const ECONTRIBUTION_NOT_FOUND: u64 = 9;
 
     // ========== Status Constants ==========
-    const CAMPAIGN_STATUS_DRAFT: u8 = 1;
-    const CAMPAIGN_STATUS_ACTIVE: u8 = 2;
-    const CAMPAIGN_STATUS_COMPLETED: u8 = 3;
-    const CAMPAIGN_STATUS_CANCELLED: u8 = 4;
+    const CAMPAIGN_STATUS_ACTIVE: u8 = 1;
+    const CAMPAIGN_STATUS_COMPLETED: u8 = 2;
+    const CAMPAIGN_STATUS_CANCELLED: u8 = 3;
 
     // ========== Fee Constants ==========
     const SERVICE_FEE: u64 = 1;
-    const CANCELLATION_FEE_PERCENTAGE: u8 = 10;
-    const REFUND_PERCENTAGE_ON_CANCELLATION: u8 = 90;
+
+    // ========== Status Getters ==========
+    public fun get_status_active(): u8 { CAMPAIGN_STATUS_ACTIVE }
+    public fun get_status_completed(): u8 { CAMPAIGN_STATUS_COMPLETED }
+    public fun get_status_cancelled(): u8 { CAMPAIGN_STATUS_CANCELLED }
 
     // ========== Resource Structs ==========
-    struct Campaign has key, store, copy, drop {
+    struct Campaign has key, store, drop {
         id: u64,
         name: String,
         creator: address,
@@ -48,37 +50,36 @@ module tidmat::campaign {
     }
 
     struct CreatorCampaignStore has key {
-        campaigns: vector<Campaign>,
+        campaigns: SimpleMap<u64, Campaign>
     }
 
     struct CampaignRegistry has key {
-        campaigns: vector<Campaign>,
+        campaign_ids: vector<u64>,
         next_campaign_id: u64,
     }
 
-    struct Fee has key {
-        amount: u64,
-        collector: address,
-    }
-
     // ========== Module Initialization ==========
-    /// Initialize the campaign registry.
-    public fun initialize_registry(admin: &signer) {
-        move_to(admin, CampaignRegistry {
-            campaigns: vector::empty(),
-            next_campaign_id: 1,
-        });
+    // Initialize the campaign registry.
+    fun init_module(admin: &signer) {
+        init_module_internal(admin);
     }
 
-    /// Create a campaign store for a creator.
+    fun init_module_internal(admin: &signer) {
+	move_to(admin, CampaignRegistry {
+	    campaign_ids: vector::empty(),
+	    next_campaign_id: 1,
+	});
+    }
+
+    // Create a campaign store for a creator.
     fun create_campaign_store(creator: &signer) {
         move_to(creator, CreatorCampaignStore {
-            campaigns: vector::empty(),
+            campaigns: simple_map::new(),
         });
     }
 
     // ========== Campaign Management Functions ==========
-    /// Create a new campaign.
+    // Create a new campaign.
     public entry fun create_campaign(
         creator: &signer,
         name: String,
@@ -92,14 +93,14 @@ module tidmat::campaign {
         service_fee: u64
     ) acquires CampaignRegistry, CreatorCampaignStore {
         let creator_addr = signer::address_of(creator);
-        
+
         // Validate campaign parameters
-        assert!(exists<CampaignRegistry>(@tidmat), error::not_found(EREGISTRY_NOT_FOUND));
-        assert!(reward_pool > 0, error::invalid_argument(EINVALID_CAMPAIGN_PARAMS));
-        assert!(quality_threshold >= 50 && quality_threshold <= 80, error::invalid_argument(EINVALID_CAMPAIGN_PARAMS));
-        assert!(deadline > timestamp::now_seconds(), error::invalid_argument(EINVALID_CAMPAIGN_PARAMS));
-        assert!(min_contributions > 0 && min_contributions < max_contributions, error::invalid_argument(EINVALID_CAMPAIGN_PARAMS));
-        assert!(service_fee <= SERVICE_FEE, error::invalid_argument(EINVALID_CAMPAIGN_PARAMS));
+        assert!(exists<CampaignRegistry>(@tidmat), EREGISTRY_NOT_FOUND);
+        assert!(reward_pool > 0, EINVALID_CAMPAIGN_PARAMS);
+        assert!(quality_threshold >= 50 && quality_threshold <= 80, EINVALID_CAMPAIGN_PARAMS);
+        assert!(deadline > timestamp::now_seconds(), EINVALID_CAMPAIGN_PARAMS);
+        assert!(min_contributions > 0 && min_contributions < max_contributions, EINVALID_CAMPAIGN_PARAMS);
+        assert!(service_fee == SERVICE_FEE, EINVALID_CAMPAIGN_PARAMS);
 
         // Charge creator for campaign creation
         treasury::process_payment(creator, service_fee);
@@ -108,7 +109,7 @@ module tidmat::campaign {
         if (!exists<CreatorCampaignStore>(creator_addr)) {
             create_campaign_store(creator);
         };
-        
+
         // Get the campaign registry and store
         let registry = borrow_global_mut<CampaignRegistry>(@tidmat);
         let store = borrow_global_mut<CreatorCampaignStore>(creator_addr);
@@ -137,152 +138,151 @@ module tidmat::campaign {
         };
 
         // Add the campaign to the registry and store
-        vector::push_back(&mut store.campaigns, campaign);
-        vector::push_back(&mut registry.campaigns, campaign);
+        simple_map::add(&mut store.campaigns, campaign_id, campaign);
+        vector::push_back(&mut registry.campaign_ids, campaign_id);
         registry.next_campaign_id = campaign_id + 1;
     }
 
-    /// Cancel a campaign.
+    // Cancel a campaign.
     public entry fun cancel_campaign(
         creator: &signer,
         campaign_id: u64
     ) acquires CreatorCampaignStore {
         let creator_addr = signer::address_of(creator);
-        assert!(exists<CreatorCampaignStore>(creator_addr), error::not_found(ESTORE_NOT_FOUND));
+        assert!(exists<CreatorCampaignStore>(creator_addr), ESTORE_NOT_FOUND);
         
         let store = borrow_global_mut<CreatorCampaignStore>(creator_addr);
-        let c_idx = campaign_id - 1;
-
-        let campaign = vector::borrow_mut(&mut store.campaigns, c_idx); 
-        assert!(campaign.id == campaign_id, error::not_found(ECAMPAIGN_NOT_FOUND));
-        assert!(campaign.creator == creator_addr, error::permission_denied(EUNAUTHORIZED_ACTION));
-        assert!(campaign.status == CAMPAIGN_STATUS_ACTIVE, error::invalid_state(EUNAUTHORIZED_ACTION));
+       
+        let campaign = simple_map::borrow_mut(&mut store.campaigns, &campaign_id); 
+        assert!(campaign.id == campaign_id, ECAMPAIGN_NOT_FOUND);
+        assert!(campaign.creator == creator_addr, EUNAUTHORIZED_ACTION);
+        assert!(campaign.status == CAMPAIGN_STATUS_ACTIVE, EUNAUTHORIZED_ACTION);
         
         // Get verified contributions
         let (_, verified_contributions) = contribution::get_contribution_tracker(campaign.id);
         let total_verified = vector::length(&verified_contributions);
 
         // Refund based on the number of verified contributions
-        if (campaign.min_contributions >= total_verified) {
-            escrow::refund(creator, campaign.escrow_c, true);
+        if (total_verified >= campaign.min_contributions) {
+            escrow::refund(creator, &mut campaign.escrow_c, true);
         } else {
-            escrow::refund(creator, campaign.escrow_c, false);
+            escrow::refund(creator, &mut campaign.escrow_c, false);
         };
 
         // Release funds if the escrow pool has a balance
-        let pool_bal = escrow::get_escrow_pool_bal(campaign.escrow_c);
+        let pool_bal = escrow::get_escrow_pool_bal(&campaign.escrow_c);
+	
         if (pool_bal > 0) {
-            escrow::release_funds(creator, campaign.escrow_c, verified_contributions, total_verified); 
+            escrow::release_funds(creator, &mut campaign.escrow_c, verified_contributions, total_verified); 
         };
 
         // Update campaign status to cancelled
         campaign.status = CAMPAIGN_STATUS_CANCELLED;
     }
 
-    /// Finalize a campaign.
+    // Finalize a campaign.
     public entry fun finalize_campaign(
         creator: &signer,
         campaign_id: u64
     ) acquires CreatorCampaignStore {
         let creator_addr = signer::address_of(creator);
-        assert!(exists<CreatorCampaignStore>(creator_addr), error::not_found(ECAMPAIGN_NOT_FOUND));
+        assert!(exists<CreatorCampaignStore>(creator_addr), ECAMPAIGN_NOT_FOUND);
         
         let store = borrow_global_mut<CreatorCampaignStore>(creator_addr);
-        let c_idx = campaign_id - 1;
 
-        let campaign = vector::borrow_mut(&mut store.campaigns, c_idx);
-        assert!(campaign.id == campaign_id, error::invalid_argument(EINVALID_CAMPAIGN_PARAMS));
-        assert!(campaign.creator == creator_addr, error::permission_denied(EUNAUTHORIZED_ACTION));
-        assert!(timestamp::now_seconds() >= campaign.deadline, error::invalid_state(ECAMPAIGN_EXPIRED));
+        let campaign = simple_map::borrow_mut(&mut store.campaigns, &campaign_id);
+        assert!(campaign.id == campaign_id, EINVALID_CAMPAIGN_PARAMS);
+        assert!(campaign.creator == creator_addr, EUNAUTHORIZED_ACTION);
         
         // Get verified contributions
-        let (_, verified_contributions) = contribution::get_contribution_tracker(campaign.id);
-        let total_verified = vector::length(&verified_contributions);
-
+        let accepted_contributions = contribution::get_accepted_contributions(campaign.id);
+        let total_accepted = vector::length(&accepted_contributions);
+	
         // Release funds if the minimum contributions are met
-        if (total_verified >= campaign.min_contributions) {
-            escrow::release_funds(creator, campaign.escrow_c, verified_contributions, total_verified);
+        if (total_accepted >= campaign.min_contributions) {
+            escrow::release_funds(creator, &mut campaign.escrow_c, accepted_contributions, total_accepted);
             campaign.status = CAMPAIGN_STATUS_COMPLETED;
         };
     }
 
     // ========== Contribution Management Functions ==========
-    /// Submit a contribution to a campaign.
+    // Submit a contribution to a campaign.
     public entry fun submit_contribution(
         contributor: &signer,
+	creator_addr: address,
         campaign_id: u64,
         data: vector<u8>
-    ) {
+    ) acquires CreatorCampaignStore {
+	assert!(!exceed_campaign_deadline(creator_addr, campaign_id), ECAMPAIGN_EXPIRED);
         contribution::submit_a_contribution(contributor, campaign_id, data);
     }
 
-    /// Update the status of a contribution.
+    // Update the status of a contribution.
     public entry fun update_contribution_status(
         _sender: &signer,
+	creator_addr: address,
         campaign_id: u64,
         contributor_id: u64,
         status: u8
-    ) {
+    ) acquires CreatorCampaignStore {
+	assert!(!exceed_campaign_deadline(creator_addr, campaign_id), ECAMPAIGN_EXPIRED);
         contribution::update_contrib_status(status, contributor_id, campaign_id);
     }
 
-    /// Accept verified contributions for a campaign.
+    // Accept a single verified contribution by its ID
+    public entry fun accept_single_contribution(creator: &signer,  contribution_id: u64) {
+	let creator_addr = signer::address_of(creator);
+	assert!(exists<CreatorCampaignStore>(creator_addr), ESTORE_NOT_FOUND);
+	
+	contribution::accept_a_contribution(contribution_id);
+    }
+
+
+    // Reject a single contribution by its ID
+    public entry fun reject_single_contribution(creator: &signer, contribution_id: u64) {
+	let creator_addr = signer::address_of(creator);
+	assert!(exists<CreatorCampaignStore>(creator_addr), ESTORE_NOT_FOUND);
+
+	contribution::reject_a_contribution(contribution_id);
+    }
+
+
+    // Accept verified contributions for a campaign.
     public entry fun accept_verified_contributions(
         creator: &signer,
         campaign_id: u64
     ) acquires CreatorCampaignStore {
         let creator_addr = signer::address_of(creator);
-        assert!(exists<CreatorCampaignStore>(creator_addr), error::not_found(ESTORE_NOT_FOUND));
+        assert!(exists<CreatorCampaignStore>(creator_addr), ESTORE_NOT_FOUND);
 
         let store = borrow_global<CreatorCampaignStore>(creator_addr);
-        let c_idx = campaign_id - 1;
 
-        let campaign = vector::borrow(&store.campaigns, c_idx);
-        assert!(campaign.id == campaign_id, error::not_found(ECAMPAIGN_NOT_FOUND));
+        let campaign = simple_map::borrow(&store.campaigns, &campaign_id);
+        assert!(campaign.id == campaign_id, ECAMPAIGN_NOT_FOUND);
 
         contribution::accept_campaign_contributions(campaign_id);
     }
 
     // ========== Query Functions ==========
-    /// Get all campaign IDs.
+    // Get all campaign IDs.
     #[view]
     public fun get_campaign_ids(): vector<u64> acquires CampaignRegistry {
-        assert!(exists<CampaignRegistry>(@tidmat), error::not_found(EREGISTRY_NOT_FOUND));
+        assert!(exists<CampaignRegistry>(@tidmat), EREGISTRY_NOT_FOUND);
 
         let registry = borrow_global<CampaignRegistry>(@tidmat);
-        let campaign_ids = vector::empty<u64>();
-        let len = vector::length<Campaign>(&registry.campaigns);
-        let i = 0;
-
-        while (i < len) {
-            let campaign_ref = vector::borrow(&registry.campaigns, i);
-            vector::push_back(&mut campaign_ids, campaign_ref.id);
-            i = i + 1;
-        };
-
-        campaign_ids
+        registry.campaign_ids
     }
 
-    /// Get campaign IDs for a specific creator.
+    // Get campaign IDs for a specific creator.
     #[view]
     public fun get_creator_campaign_ids(creator_addr: address): vector<u64> acquires CreatorCampaignStore {
-        assert!(exists<CreatorCampaignStore>(creator_addr), error::not_found(ESTORE_NOT_FOUND));
+        assert!(exists<CreatorCampaignStore>(creator_addr), ESTORE_NOT_FOUND);
         
         let store = borrow_global<CreatorCampaignStore>(creator_addr);
-        let campaign_ids = vector::empty<u64>();
-        let len = vector::length<Campaign>(&store.campaigns);
-        let i = 0;
-
-        while (i < len) {
-            let campaign_ref = vector::borrow(&store.campaigns, i);
-            vector::push_back(&mut campaign_ids, campaign_ref.id);
-            i = i + 1;
-        };
-
-        campaign_ids
+        simple_map::keys(&store.campaigns)
     }
 
-    /// Get campaign details.
+    // Get campaign details.
     #[view]
     public fun get_campaign_details(creator_addr: address, campaign_id: u64): (
         u64,
@@ -297,12 +297,11 @@ module tidmat::campaign {
         u64,
         u8
     ) acquires CreatorCampaignStore {
-        assert!(exists<CreatorCampaignStore>(creator_addr), error::not_found(ESTORE_NOT_FOUND));
+        assert!(exists<CreatorCampaignStore>(creator_addr), ESTORE_NOT_FOUND);
         
         let store = borrow_global<CreatorCampaignStore>(creator_addr);
-        let c_idx = campaign_id - 1;
 
-        let campaign = vector::borrow(&store.campaigns, c_idx);
+        let campaign = simple_map::borrow(&store.campaigns, &campaign_id);
 
         (
             campaign.id,
@@ -319,15 +318,32 @@ module tidmat::campaign {
         )
     }
 
-    /// Get the status of a campaign.
+    // Get the status of a campaign.
     #[view]
     public fun get_campaign_status(creator_addr: address, campaign_id: u64): u8 acquires CreatorCampaignStore {
-        assert!(exists<CreatorCampaignStore>(creator_addr), error::not_found(ESTORE_NOT_FOUND));
+        assert!(exists<CreatorCampaignStore>(creator_addr), ESTORE_NOT_FOUND);
         
         let store = borrow_global<CreatorCampaignStore>(creator_addr);
-        let c_idx = campaign_id - 1;
-
-        let campaign = vector::borrow(&store.campaigns, c_idx);
+        
+        let campaign = simple_map::borrow(&store.campaigns, &campaign_id);
         campaign.status
+    }
+
+    fun exceed_campaign_deadline(creator_addr: address, campaign_id: u64): bool acquires CreatorCampaignStore {
+	let store = borrow_global<CreatorCampaignStore>(creator_addr);
+
+	let campaign = simple_map::borrow(&store.campaigns, &campaign_id);
+	if (timestamp::now_seconds() >= campaign.deadline) {
+	    return true
+	};
+
+	return false
+    }
+
+    #[test_only]
+    public fun init_module_for_test(aptos_framework: &signer, admin: &signer) {
+	timestamp::set_time_has_started_for_testing(aptos_framework);
+
+ 	init_module_internal(admin);
     }
 }

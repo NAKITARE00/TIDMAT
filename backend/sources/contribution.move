@@ -2,6 +2,7 @@ module tidmat::contribution {
     use std::signer;
     use std::error;
     use std::vector;
+    use aptos_framework::timestamp;
 
     // ========== Error Constants ==========
     const ECONTRIBUTION_ALREADY_EXISTS: u64 = 1;
@@ -39,13 +40,15 @@ module tidmat::contribution {
 
     // ========== Module Initialization ==========
     /// Initialize the contribution module for the given admin account
-    public fun init_contribution_module(admin: &signer) {
-        if (!exists<ContributionTracker>(signer::address_of(admin))) {
-            move_to(admin, ContributionTracker {
-                contributions: vector::empty<Contribution>(),
-                next_contribution_id: 1,
-            });
-        }
+    fun init_module(admin: &signer) {
+        init_module_internal(admin);
+    }
+
+    fun init_module_internal(admin: &signer) {
+	move_to(admin, ContributionTracker {
+	    contributions: vector::empty<Contribution>(),
+	    next_contribution_id: 1,
+	});
     }
 
     // ========== Contribution Management Functions ==========
@@ -57,7 +60,7 @@ module tidmat::contribution {
     ) acquires ContributionTracker {
         assert!(vector::length(&data) > 0, error::invalid_argument(EINVALID_CONTRIBUTION_PARAMS));
 
-        let tracker_ref = borrow_global_mut<ContributionTracker>(signer::address_of(contributor));
+        let tracker_ref = borrow_global_mut<ContributionTracker>(@tidmat);
         let contributor_addr = signer::address_of(contributor);
 
         assert!(
@@ -98,11 +101,35 @@ module tidmat::contribution {
         assert!(contrib_ref.campaign_id == campaign_id, error::not_found(ECONTRIBUTION_NOT_FOUND));
         contrib_ref.status = status;
     }
+	
+    // Accept a verified contribution
+    public fun accept_a_contribution(contribution_id: u64) acquires ContributionTracker {
+	let tracker = borrow_global_mut<ContributionTracker>(@tidmat);
+
+	let c_idx = contribution_id - 1;
+	let contrib_ref = vector::borrow_mut(&mut tracker.contributions, c_idx);
+	
+	if (contrib_ref.status == get_status_verified()) {
+	    contrib_ref.status = get_status_accepted();
+	};
+	
+    }
+
+    // Reject a contribution
+    public fun reject_a_contribution(contribution_id: u64) acquires ContributionTracker {
+	let tracker = borrow_global_mut<ContributionTracker>(@tidmat);
+	
+	let c_idx = contribution_id - 1;
+	let contrib_ref = vector::borrow_mut(&mut tracker.contributions, c_idx);
+	contrib_ref.status = get_status_rejected();
+    }
+
+
 
     /// Accept all verified contributions for a campaign
     public fun accept_campaign_contributions(campaign_id: u64) acquires ContributionTracker {
         let tracker = borrow_global_mut<ContributionTracker>(@tidmat);
-        let total_verified = 0;
+        let total_accepted = 0;
         let len = vector::length(&tracker.contributions);
         let i = 0;
 
@@ -110,12 +137,12 @@ module tidmat::contribution {
             let contribution_ref = vector::borrow_mut(&mut tracker.contributions, i);
             if (contribution_ref.campaign_id == campaign_id && contribution_ref.status == CONTRIBUTION_STATUS_VERIFIED) {
                 contribution_ref.status = CONTRIBUTION_STATUS_ACCEPTED;
-                total_verified = total_verified + 1;
+                total_accepted = total_accepted + 1;
             };
             i = i + 1;
         };
 
-        assert!(total_verified > 0, error::invalid_argument(EINVALID_CONTRIBUTION_PARAMS));
+        assert!(total_accepted > 0, error::invalid_argument(EINVALID_CONTRIBUTION_PARAMS));
     }
 
     // ========== Query Functions ==========
@@ -152,6 +179,23 @@ module tidmat::contribution {
             contribution_ref.data,
             contribution_ref.status
         )
+    }
+
+    public fun get_accepted_contributions(campaign_id: u64): vector<Contribution> acquires ContributionTracker {
+	let tracker = borrow_global<ContributionTracker>(@tidmat);
+	let acc = vector::empty<Contribution>();
+	
+	let i = 0;
+	let len = vector::length(&tracker.contributions);
+	while (i < len) {
+	   let contribution_ref = vector::borrow(&tracker.contributions, i);
+	   if (contribution_ref.campaign_id == campaign_id && contribution_ref.status == CONTRIBUTION_STATUS_ACCEPTED) {
+		vector::push_back(&mut acc, *contribution_ref);
+	   };
+	   i = i + 1;
+	};
+
+	acc
     }
 
     /// Get contribution statistics for a campaign
@@ -204,5 +248,12 @@ module tidmat::contribution {
             i = i + 1;
         };
         false
+    }
+
+    #[test_only]
+    public fun init_module_for_test(aptos_framework: &signer, admin: &signer) {
+	timestamp::set_time_has_started_for_testing(aptos_framework);
+
+	init_module_internal(admin);
     }
 }

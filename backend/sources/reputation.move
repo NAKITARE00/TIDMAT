@@ -40,15 +40,31 @@ module tidmat::reputation {
         score_weights: vector<u64>
     }
 
-    public entry fun initialize_reputation_system(
-        admin: &signer,
-        min_scores: vector<u64>,
-        weights: vector<u64>
-    ) {
+    fun init_module(admin: &signer) {
+	init_module_internal(admin);
+    }
+
+    fun init_module_internal(admin: &signer) {
+	let min_scores = vector[
+            5,   // Novice Contributor (Requires 5 total contributions)
+            20,  // Experienced Contributor (Requires 20 successful contributions)
+            1000, // Expert Contributor (Requires 1000 reputation points)
+            95,  // Quality Master (Requires 95+ quality score)
+            10   // Consistent Contributor (Requires 10 total contributions + 90% success rate)
+        ];
+
+        let score_weights = vector[
+            10,  // +10 for each successful contribution
+            5,   // Use as -5 for failed contribution
+            20,  // +20 for dispute resolution in favor
+            10,  // Use as -10 for late payments
+            50   // +50 for high-quality contributions
+        ];
+	
         move_to(admin, ReputationConfig {
             admin: signer::address_of(admin),
             min_score_for_badges: min_scores,
-            score_weights: weights
+            score_weights
         });
     }
 
@@ -201,5 +217,13 @@ module tidmat::reputation {
             };
             vector::push_back(&mut profile.badges, badge);
         }
+    }
+
+
+    #[test_only]
+    public fun init_module_for_test(aptos_framework: &signer, admin: &signer) {
+	timestamp::set_time_has_started_for_testing(aptos_framework);
+
+ 	init_module_internal(admin);
     }
 }

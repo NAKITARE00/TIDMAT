@@ -1,6 +1,5 @@
 module tidmat::subscription {
     use std::signer;
-    use std::error;
     use aptos_framework::timestamp;
     use tidmat::treasury;
 
