@@ -2,8 +2,10 @@ module tidmat::campaign {
     use std::signer;
     use std::vector;
     use std::string::String;
+    use aptos_std::math64;
     use aptos_std::simple_map::{Self, SimpleMap};
     use aptos_framework::timestamp;
+    use aptos_framework::primary_fungible_store;
     use tidmat::escrow;
     use tidmat::treasury;
     use tidmat::contribution;
@@ -18,6 +20,7 @@ module tidmat::campaign {
     const ESTORE_NOT_FOUND: u64 = 7;
     const EINVALID_CONTRIBUTION_PARAMS: u64 = 8;
     const ECONTRIBUTION_NOT_FOUND: u64 = 9;
+    const ENOT_ENOUGH_BAL: u64 = 10;
 
     // ========== Status Constants ==========
     const CAMPAIGN_STATUS_ACTIVE: u8 = 1;
@@ -25,7 +28,7 @@ module tidmat::campaign {
     const CAMPAIGN_STATUS_CANCELLED: u8 = 3;
 
     // ========== Fee Constants ==========
-    const SERVICE_FEE: u64 = 1;
+    const MAX_SERVICE_FEE_PERCENTAGE: u64 = 1;
 
     // ========== Status Getters ==========
     public fun get_status_active(): u8 { CAMPAIGN_STATUS_ACTIVE }
@@ -100,10 +103,20 @@ module tidmat::campaign {
         assert!(quality_threshold >= 50 && quality_threshold <= 80, EINVALID_CAMPAIGN_PARAMS);
         assert!(deadline > timestamp::now_seconds(), EINVALID_CAMPAIGN_PARAMS);
         assert!(min_contributions > 0 && min_contributions < max_contributions, EINVALID_CAMPAIGN_PARAMS);
-        assert!(service_fee == SERVICE_FEE, EINVALID_CAMPAIGN_PARAMS);
+        assert!(service_fee <= MAX_SERVICE_FEE_PERCENTAGE, EINVALID_CAMPAIGN_PARAMS);
 
-        // Charge creator for campaign creation
-        treasury::process_payment(creator, service_fee);
+	// Marketplace Cut
+	let cut = math64::mul_div(reward_pool, service_fee, 100);
+        let fa_metadata_object = treasury::get_fa_metadata();
+	let creator_store_bal = primary_fungible_store::balance(creator_addr, fa_metadata_object);
+	let total_amount = cut + reward_pool;	
+
+        assert!(creator_store_bal >= total_amount, ENOT_ENOUGH_BAL);
+
+	let creator_store = primary_fungible_store::primary_store(creator_addr, fa_metadata_object);
+
+ 	// Process fee payment
+        treasury::process_payment(creator, creator_store, cut);
         
         // Create a campaign store if it doesn't exist
         if (!exists<CreatorCampaignStore>(creator_addr)) {

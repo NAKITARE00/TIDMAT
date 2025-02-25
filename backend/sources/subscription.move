@@ -1,6 +1,7 @@
 module tidmat::subscription {
     use std::signer;
     use aptos_framework::timestamp;
+    use aptos_framework::primary_fungible_store;
     use tidmat::treasury;
 
     /// Error codes
@@ -10,6 +11,7 @@ module tidmat::subscription {
     const ESUBSCRIPTION_EXPIRED: u64 = 4;
     const EINVALID_PAYMENT: u64 = 5;
     const ENOT_AUTHORIZED: u64 = 6;
+    const ENOT_ENOUGH_BAL: u64 = 7;
 
     /// Subscription tiers
     const TIER_BASIC: u8 = 1;
@@ -70,7 +72,14 @@ module tidmat::subscription {
 
         let cost = calculate_subscription_cost(tier, duration);
 
-        treasury::process_payment(subscriber, cost);
+        let fa_metadata_object = treasury::get_fa_metadata();
+        let subscriber_store_bal = primary_fungible_store::balance(subscriber_addr, fa_metadata_object);
+
+        assert!(subscriber_store_bal >= cost, ENOT_ENOUGH_BAL);
+
+        let subscriber_store = primary_fungible_store::primary_store(subscriber_addr, fa_metadata_object);
+
+        treasury::process_payment(subscriber, subscriber_store, cost);
 
         let now = timestamp::now_seconds();
         let subscription = Subscription {
@@ -94,7 +103,14 @@ module tidmat::subscription {
         let subscription = borrow_global_mut<Subscription>(subscriber_addr);
         let cost = calculate_subscription_cost(subscription.tier, duration);
 
-        treasury::process_payment(subscriber, cost);
+        let fa_metadata_object = treasury::get_fa_metadata();
+        let subscriber_store_bal = primary_fungible_store::balance(subscriber_addr, fa_metadata_object);
+
+        assert!(subscriber_store_bal >= cost, ENOT_ENOUGH_BAL);
+
+        let subscriber_store = primary_fungible_store::primary_store(subscriber_addr, fa_metadata_object);
+
+        treasury::process_payment(subscriber, subscriber_store, cost);
 
         subscription.end_time = subscription.end_time + duration;
         subscription.total_paid = subscription.total_paid + cost;
@@ -113,7 +129,14 @@ module tidmat::subscription {
         let remaining_time = subscription.end_time - timestamp::now_seconds();
         let upgrade_cost = calculate_upgrade_cost(subscription.tier, new_tier, remaining_time);
 
-        treasury::process_payment(subscriber, upgrade_cost);
+        let fa_metadata_object = treasury::get_fa_metadata();
+        let subscriber_store_bal = primary_fungible_store::balance(subscriber_addr, fa_metadata_object);
+
+        assert!(subscriber_store_bal >= upgrade_cost, ENOT_ENOUGH_BAL);
+
+        let subscriber_store = primary_fungible_store::primary_store(subscriber_addr, fa_metadata_object);
+
+        treasury::process_payment(subscriber, subscriber_store, upgrade_cost);
 
         subscription.tier = new_tier;
         subscription.total_paid = subscription.total_paid + upgrade_cost;

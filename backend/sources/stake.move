@@ -7,11 +7,9 @@ module tidmat::stake {
     use aptos_framework::primary_fungible_store;
 
     const EINSUFFICIENT_FUNDS: u64 = 1;
-    const EUNAUTHORIZED: u64 = 2;
-    const ESTAKE_NOT_FOUND: u64 = 3;
-    const EINVALID_AMOUNT: u64 = 4;
-    const EAMOUNT_ZERO: u64 = 5;
-    const ENOT_ENOUGH_BAL: u64 = 6;
+    const ESTAKE_NOT_FOUND: u64 = 2;
+    const EINVALID_AMOUNT: u64 = 3;
+    const ENOT_ENOUGH_BAL: u64 = 4;
 
     struct StakePool has key, store, drop {
 	fa_metadata_object: Object<Metadata>, // Fungible asset stakers are staking rewards in
@@ -58,7 +56,7 @@ module tidmat::stake {
    	owner: &signer,
 	initial_stake: u64
     ): StakePool acquires FungibleAssetMetadata {
-        assert!(initial_stake > 0, error::invalid_argument(EINSUFFICIENT_FUNDS));
+        assert!(initial_stake > 0, EINVALID_AMOUNT);
 
 	let owner_addr = signer::address_of(owner);
 	let fa = borrow_global<FungibleAssetMetadata>(@tidmat);
@@ -83,7 +81,7 @@ module tidmat::stake {
 	    fa_metadata_object: fa.fa_metadata_object,
 	    stake_store,
 	    total_staked: initial_stake,
-	    available_bal: initial_stake,
+	    available_bal: fungible_asset::balance(stake_store),
 	    owner: owner_addr,
 	    controller: ctlr
 	};
@@ -103,7 +101,7 @@ module tidmat::stake {
 	    amount
 	);
 	pool.total_staked = pool.total_staked - amount;
-	pool.available_bal = pool.available_bal - amount;
+	pool.available_bal = fungible_asset::balance(pool.stake_store);
     } 
 
 
@@ -113,6 +111,10 @@ module tidmat::stake {
 
     public fun get_pool_bal(pool: &StakePool): u64 {
 	pool.available_bal
+    }
+
+    public fun get_escrow_pool(pool: &StakePool): Object<FungibleStore> {
+	pool.stake_store
     }
 
     #[test_only]

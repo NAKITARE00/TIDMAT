@@ -1,5 +1,4 @@
 module tidmat::reputation {
-    use std::error;
     use std::signer;
     use std::string::{Self, String};
     use std::vector;
@@ -19,6 +18,14 @@ module tidmat::reputation {
     const BADGE_EXPERT_CONTRIBUTOR: u8 = 3;
     const BADGE_QUALITY_MASTER: u8 = 4;
     const BADGE_CONSISTENT_CONTRIBUTOR: u8 = 5;
+
+    // ========== Badges Getters ==========
+    public fun get_badge_novice(): u8 { BADGE_NOVICE_CONTRIBUTOR }
+    public fun get_badge_experienced(): u8 { BADGE_EXPERIENCED_CONTRIBUTOR }
+    public fun get_badge_expert(): u8 { BADGE_EXPERT_CONTRIBUTOR }
+    public fun get_badge_quality(): u8 { BADGE_QUALITY_MASTER }
+    public fun get_badge_consistent(): u8 { BADGE_CONSISTENT_CONTRIBUTOR }
+
 
     struct Badge has store, drop, copy {
         badge_type: u8,
@@ -68,9 +75,9 @@ module tidmat::reputation {
         });
     }
 
-    public entry fun create_profile(account: &signer) {
+    public fun create_profile(account: &signer) {
         let account_addr = signer::address_of(account);
-        assert!(!exists<ContributorProfile>(account_addr), error::already_exists(EPROFILE_ALREADY_EXISTS));
+        assert!(!exists<ContributorProfile>(account_addr), EPROFILE_ALREADY_EXISTS);
 
         let profile = ContributorProfile {
             reputation_score: 0,
@@ -90,7 +97,7 @@ module tidmat::reputation {
         quality_change: u64
     ) acquires ContributorProfile, ReputationConfig {
         let config = borrow_global<ReputationConfig>(@tidmat);
-        assert!(signer::address_of(admin) == config.admin, error::permission_denied(ENOT_AUTHORIZED));
+        assert!(signer::address_of(admin) == config.admin, ENOT_AUTHORIZED);
         
         let profile = borrow_global_mut<ContributorProfile>(contributor_address);
         
@@ -105,10 +112,12 @@ module tidmat::reputation {
         was_successful: bool
     ) acquires ContributorProfile {
         let profile = borrow_global_mut<ContributorProfile>(contributor_address);
-        profile.total_contributions = profile.total_contributions + 1;
         if (was_successful) {
             profile.successful_contributions = profile.successful_contributions + 1;
-        };
+        } else {
+	    profile.total_contributions = profile.total_contributions + 1;
+	};
+
         check_and_award_badges(profile);
     }
 
@@ -119,8 +128,8 @@ module tidmat::reputation {
         metadata: String
     ) acquires ContributorProfile, ReputationConfig {
         let config = borrow_global<ReputationConfig>(@tidmat);
-        assert!(signer::address_of(admin) == config.admin, error::permission_denied(ENOT_AUTHORIZED));
-        assert!(badge_type <= BADGE_CONSISTENT_CONTRIBUTOR, error::invalid_argument(EINVALID_BADGE_TYPE));
+        assert!(signer::address_of(admin) == config.admin, ENOT_AUTHORIZED);
+        assert!(badge_type <= BADGE_CONSISTENT_CONTRIBUTOR, EINVALID_BADGE_TYPE);
         
         let profile = borrow_global_mut<ContributorProfile>(contributor_address);
         award_badge(profile, badge_type, metadata);
@@ -128,21 +137,21 @@ module tidmat::reputation {
 
     #[view]
     public fun get_reputation_score(contributor_address: address): u64 acquires ContributorProfile {
-        assert!(exists<ContributorProfile>(contributor_address), error::not_found(EPROFILE_NOT_FOUND));
+        assert!(exists<ContributorProfile>(contributor_address), EPROFILE_NOT_FOUND);
         let profile = borrow_global<ContributorProfile>(contributor_address);
         profile.reputation_score
     }
 
     #[view]
     public fun get_quality_score(contributor_address: address): u64 acquires ContributorProfile {
-        assert!(exists<ContributorProfile>(contributor_address), error::not_found(EPROFILE_NOT_FOUND));
+        assert!(exists<ContributorProfile>(contributor_address), EPROFILE_NOT_FOUND);
         let profile = borrow_global<ContributorProfile>(contributor_address);
         profile.quality_score
     }
 
     #[view]
     public fun get_contribution_stats(contributor_address: address): (u64, u64) acquires ContributorProfile {
-        assert!(exists<ContributorProfile>(contributor_address), error::not_found(EPROFILE_NOT_FOUND));
+        assert!(exists<ContributorProfile>(contributor_address), EPROFILE_NOT_FOUND);
         let profile = borrow_global<ContributorProfile>(contributor_address);
         (profile.total_contributions, profile.successful_contributions)
     }
@@ -158,7 +167,7 @@ module tidmat::reputation {
 
     #[view]
     public fun get_all_badges(contributor_address: address): vector<Badge> acquires ContributorProfile {
-        assert!(exists<ContributorProfile>(contributor_address), error::not_found(EPROFILE_NOT_FOUND));
+        assert!(exists<ContributorProfile>(contributor_address), EPROFILE_NOT_FOUND);
         let profile = borrow_global<ContributorProfile>(contributor_address);
         profile.badges
     }
@@ -219,6 +228,9 @@ module tidmat::reputation {
         }
     }
 
+    public fun profile_exists(contributor_addr: address): bool {
+	exists<ContributorProfile>(contributor_addr)
+    }
 
     #[test_only]
     public fun init_module_for_test(aptos_framework: &signer, admin: &signer) {
