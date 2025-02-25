@@ -1,8 +1,8 @@
 module tidmat::contribution {
     use std::signer;
-    use std::error;
     use std::vector;
     use aptos_framework::timestamp;
+    use tidmat::reputation;
 
     // ========== Error Constants ==========
     const ECONTRIBUTION_ALREADY_EXISTS: u64 = 1;
@@ -58,14 +58,19 @@ module tidmat::contribution {
         campaign_id: u64,
         data: vector<u8>
     ) acquires ContributionTracker {
-        assert!(vector::length(&data) > 0, error::invalid_argument(EINVALID_CONTRIBUTION_PARAMS));
+        assert!(vector::length(&data) > 0, EINVALID_CONTRIBUTION_PARAMS);
 
         let tracker_ref = borrow_global_mut<ContributionTracker>(@tidmat);
         let contributor_addr = signer::address_of(contributor);
 
+	// Create contribution profile if it doesn't exist
+	if (!reputation::profile_exists(contributor_addr)) {
+	    reputation::create_profile(contributor);
+	};
+
         assert!(
             !contribution_exists_for_campaign_and_contributor(&tracker_ref.contributions, campaign_id, contributor_addr),
-            error::already_exists(ECONTRIBUTION_ALREADY_EXISTS)
+            ECONTRIBUTION_ALREADY_EXISTS
         );
 
         let contrib_id = tracker_ref.next_contribution_id;
@@ -76,6 +81,7 @@ module tidmat::contribution {
             data,
             status: CONTRIBUTION_STATUS_SUBMITTED,
         };
+	reputation::record_contribution(contributor_addr, false);	
 
         vector::push_back(&mut tracker_ref.contributions, contrib);
         tracker_ref.next_contribution_id = tracker_ref.next_contribution_id + 1;
@@ -89,16 +95,16 @@ module tidmat::contribution {
     ) acquires ContributionTracker {
         assert!(
             status == CONTRIBUTION_STATUS_VERIFIED || status == CONTRIBUTION_STATUS_REJECTED,
-            error::invalid_argument(EINVALID_CONTRIBUTION_PARAMS)
+            EINVALID_CONTRIBUTION_PARAMS
         );
 
         let tracker = borrow_global_mut<ContributionTracker>(@tidmat);
         let c_idx = contrib_id - 1;
 
-        assert!(c_idx < vector::length(&tracker.contributions), error::not_found(ECONTRIBUTION_NOT_FOUND));
+        assert!(c_idx < vector::length(&tracker.contributions), ECONTRIBUTION_NOT_FOUND);
 
         let contrib_ref = vector::borrow_mut(&mut tracker.contributions, c_idx);
-        assert!(contrib_ref.campaign_id == campaign_id, error::not_found(ECONTRIBUTION_NOT_FOUND));
+        assert!(contrib_ref.campaign_id == campaign_id, ECONTRIBUTION_NOT_FOUND);
         contrib_ref.status = status;
     }
 	
@@ -111,6 +117,7 @@ module tidmat::contribution {
 	
 	if (contrib_ref.status == get_status_verified()) {
 	    contrib_ref.status = get_status_accepted();
+	    reputation::record_contribution(contrib_ref.contributor, true);
 	};
 	
     }
@@ -137,12 +144,13 @@ module tidmat::contribution {
             let contribution_ref = vector::borrow_mut(&mut tracker.contributions, i);
             if (contribution_ref.campaign_id == campaign_id && contribution_ref.status == CONTRIBUTION_STATUS_VERIFIED) {
                 contribution_ref.status = CONTRIBUTION_STATUS_ACCEPTED;
+		reputation::record_contribution(contribution_ref.contributor, true);
                 total_accepted = total_accepted + 1;
             };
             i = i + 1;
         };
 
-        assert!(total_accepted > 0, error::invalid_argument(EINVALID_CONTRIBUTION_PARAMS));
+        assert!(total_accepted > 0, EINVALID_CONTRIBUTION_PARAMS);
     }
 
     // ========== Query Functions ==========
@@ -170,7 +178,7 @@ module tidmat::contribution {
         let tracker = borrow_global<ContributionTracker>(@tidmat);
         let c_idx = contributor_id - 1;
 
-        assert!(c_idx < vector::length(&tracker.contributions), error::not_found(ECONTRIBUTION_NOT_FOUND));
+        assert!(c_idx < vector::length(&tracker.contributions), ECONTRIBUTION_NOT_FOUND);
 
         let contribution_ref = vector::borrow(&tracker.contributions, c_idx);
         (
@@ -255,5 +263,16 @@ module tidmat::contribution {
 	timestamp::set_time_has_started_for_testing(aptos_framework);
 
 	init_module_internal(admin);
+    }
+
+    #[test_only]
+    public fun create_contrib_for_test(contrib_id: u64, campaign_id: u64, contributor: address, data: vector<u8>, status: u8): Contribution {
+	Contribution {
+	    contribution_id: contrib_id,
+	    campaign_id,
+	    contributor,
+	    data,
+	    status: status
+	}
     }
 }

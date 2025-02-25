@@ -4,6 +4,7 @@ module tidmat::campaign_tests {
     use std::vector;
     use std::string;
     use std::option;
+    use aptos_std::math64;
     use aptos_framework::timestamp;
     use aptos_framework::fungible_asset::{Self, Metadata};
     use aptos_framework::object;
@@ -13,9 +14,6 @@ module tidmat::campaign_tests {
     use tidmat::treasury;
     use tidmat::reputation;    
     use tidmat::stake;
-
-    const CREATOR: address = @0x123;
-    const ALICE_CONTRIB: address = @0x456;
 
     const REWARD_POOL: u64 = 1000;
     const MIN_CONTRIBUTIONS: u64 = 1;
@@ -278,6 +276,35 @@ module tidmat::campaign_tests {
 	assert!(*vector::borrow(&campaign_ids, 0) == 1, 2);
     }
 
+    #[test(aptos_framework = @std, admin = @tidmat, creator = @0x123, alice_contrib = @0x456)]
+    fun test_create_campaign_service_fee_debited(aptos_framework: &signer, admin: &signer, creator: &signer, alice_contrib: &signer) {
+        setup_fa(aptos_framework, admin, creator, alice_contrib);
+
+        let campaign_name = string::utf8(b"Test Campaign");
+        let sample_data = vector::empty<u8>();
+        vector::append(&mut sample_data, b"sample_data");
+
+        let data_type = vector::empty<u8>();
+        vector::append(&mut data_type, b"text");
+
+        campaign::create_campaign(
+            creator,
+            campaign_name,
+            REWARD_POOL,
+            sample_data,
+            data_type,
+            QUALITY_THRESHOLD,
+            timestamp::now_seconds() + CAMPAIGN_DURATION,
+            MIN_CONTRIBUTIONS,
+            MAX_CONTRIBUTIONS,
+            SERVICE_FEE
+        );
+
+	let bal = treasury::get_treasury_bal();
+	let percentage_cut = math64::mul_div(REWARD_POOL, SERVICE_FEE, 100);
+	
+	assert!(bal == percentage_cut, 1);
+    }
 
     fun create_contribution(creator: &signer, contributor: &signer, creator_addr: address, campaign_id: u64, contributor_id: u64) {
  	let contribution_data = vector::empty<u8>();

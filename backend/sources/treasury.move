@@ -1,9 +1,8 @@
 module tidmat::treasury {
     use std::signer;
-    use std::error;
     use aptos_framework::timestamp;
     use aptos_framework::object::{Self, Object};
-    use aptos_framework::fungible_asset::{Self, Metadata};
+    use aptos_framework::fungible_asset::{Self, Metadata, FungibleStore};
     use aptos_framework::primary_fungible_store;
 
     const INSUFFICIENT_FUNDS: u64 = 1;
@@ -55,24 +54,15 @@ module tidmat::treasury {
 	});
     }
 
-    // Add a public function for external initialization
-    public fun initialize_treasury(admin: &signer) {
-        let fa_metadata = object::address_to_object<Metadata>(@fa_metadata_addr);
-        init_module_internal(admin, fa_metadata);
-    }
+    public fun process_payment(payer: &signer, store:Object<FungibleStore>, amount: u64) acquires Treasury {  
+        assert!(exists<Treasury>(@tidmat), ETREASURY_NOT_FOUND);
+	assert!(fungible_asset::balance(store) >= amount, ENOT_ENOUGH_BAL);
 
-    public fun process_payment(payer: &signer, amount: u64) acquires Treasury, FungibleAssetMetadata {
-        let payer_addr = signer::address_of(payer);
-        
-        assert!(exists<Treasury>(@tidmat), error::not_found(ETREASURY_NOT_FOUND));
         let treasury = borrow_global_mut<Treasury>(@tidmat);
-
-        let fa = borrow_global<FungibleAssetMetadata>(@tidmat);
-        assert!(primary_fungible_store::balance(payer_addr, fa.fa_metadata_object) >= amount, ENOT_ENOUGH_BAL); 
 
         fungible_asset::transfer(
             payer,
-            primary_fungible_store::primary_store(payer_addr, fa.fa_metadata_object),
+            store,
             treasury.store,
             amount
         );
@@ -96,10 +86,15 @@ module tidmat::treasury {
 
     #[view]
     public fun get_treasury_bal(): u64 acquires Treasury {
-        assert!(exists<Treasury>(@tidmat), error::not_found(ETREASURY_NOT_FOUND));
+        assert!(exists<Treasury>(@tidmat), ETREASURY_NOT_FOUND);
         let treasury = borrow_global<Treasury>(@tidmat);
         treasury.bal
     }
+
+    public fun get_fa_metadata(): Object<Metadata> acquires FungibleAssetMetadata {
+	borrow_global<FungibleAssetMetadata>(@tidmat).fa_metadata_object
+    }
+
 
     public fun assert_admin(account: &signer) acquires Admin {
         let account_addr = signer::address_of(account);
