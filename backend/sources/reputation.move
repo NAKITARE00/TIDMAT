@@ -107,7 +107,7 @@ module tidmat::reputation {
         check_and_award_badges(profile);
     }
 
-    public entry fun record_contribution(
+    public fun record_contribution(
         contributor_address: address,
         was_successful: bool
     ) acquires ContributorProfile {
