@@ -87,7 +87,7 @@ module tidmat::campaign_tests {
         );
 
         let creator_addr = signer::address_of(creator);
-        let (id, name, creator_from_campaign, reward_pool, _, _, quality_threshold, _, min_contribs, max_contribs, status) = campaign::get_campaign_details(creator_addr, 1);
+        let (id, name, creator_from_campaign, reward_pool, _, _, quality_threshold, _, min_contribs, max_contribs, status) = campaign::get_campaign_details(1);
 	
         assert!(id == 1, 1);
         assert!(name == campaign_name, 2);

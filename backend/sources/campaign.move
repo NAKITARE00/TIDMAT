@@ -57,6 +57,7 @@ module tidmat::campaign {
     }
 
     struct CampaignRegistry has key {
+	campaign_owner: SimpleMap<u64, address>,
         campaign_ids: vector<u64>,
         next_campaign_id: u64,
     }
@@ -69,6 +70,7 @@ module tidmat::campaign {
 
     fun init_module_internal(admin: &signer) {
 	move_to(admin, CampaignRegistry {
+	    campaign_owner: simple_map::new(),
 	    campaign_ids: vector::empty(),
 	    next_campaign_id: 1,
 	});
@@ -148,10 +150,11 @@ module tidmat::campaign {
             max_contributions,
             status: CAMPAIGN_STATUS_ACTIVE,
             service_fee,
-        };
+        };	
 
         // Add the campaign to the registry and store
         simple_map::add(&mut store.campaigns, campaign_id, campaign);
+	simple_map::add(&mut registry.campaign_owner, campaign_id, creator_addr);
         vector::push_back(&mut registry.campaign_ids, campaign_id);
         registry.next_campaign_id = campaign_id + 1;
     }
@@ -297,7 +300,7 @@ module tidmat::campaign {
 
     // Get campaign details.
     #[view]
-    public fun get_campaign_details(creator_addr: address, campaign_id: u64): (
+    public fun get_campaign_details(campaign_id: u64): (
         u64,
         String,
         address,
@@ -309,10 +312,13 @@ module tidmat::campaign {
         u64,
         u64,
         u8
-    ) acquires CreatorCampaignStore {
-        assert!(exists<CreatorCampaignStore>(creator_addr), ESTORE_NOT_FOUND);
+    ) acquires CreatorCampaignStore, CampaignRegistry {
+	let registry = borrow_global<CampaignRegistry>(@tidmat);
+	let creator_addr = simple_map::borrow(&registry.campaign_owner, &campaign_id);
+	
+        assert!(exists<CreatorCampaignStore>(*creator_addr), ESTORE_NOT_FOUND);
         
-        let store = borrow_global<CreatorCampaignStore>(creator_addr);
+        let store = borrow_global<CreatorCampaignStore>(*creator_addr);
 
         let campaign = simple_map::borrow(&store.campaigns, &campaign_id);
 
