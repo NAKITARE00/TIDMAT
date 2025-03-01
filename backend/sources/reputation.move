@@ -75,7 +75,7 @@ module tidmat::reputation {
         });
     }
 
-    public fun create_profile(account: &signer) {
+    public entry fun create_profile(account: &signer) {
         let account_addr = signer::address_of(account);
         assert!(!exists<ContributorProfile>(account_addr), EPROFILE_ALREADY_EXISTS);
 
